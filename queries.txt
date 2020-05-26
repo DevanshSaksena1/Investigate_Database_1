@@ -1,0 +1,129 @@
+/*
+Question 1: How many times were family movies rented out (by category)?
+The following categories are considered family movies: Animation, Children, Classics, Comedy, Famiy, and Music.
+*/
+
+WITH rental_count AS (
+  SELECT f.title film_title,
+         c.name category_name,
+         COUNT(rental_id) rental_count
+    FROM film f
+    JOIN film_category fc
+      ON f.film_id = fc.film_id
+    JOIN category c
+      ON fc.category_id = c.category_id
+    JOIN inventory i
+      ON f.film_id = i.film_id
+    JOIN rental r
+      ON r.inventory_id = i.inventory_id
+  GROUP BY 2, 1
+  HAVING c.name IN ('Animation','Children','Classics','Comedy','Family','Music')
+  ORDER BY 2, 1
+)
+
+SELECT category_name,
+       SUM(rental_count) AS tot_rental_count
+  FROM rental_count
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+/*
+Question 2: For quartiles based on movie rental duration, what is the breakdown of family friendly movies, by category, in each quartile?
+Note: t1 divides movie titles into 4 levels (first_quarter, second_quarter, third_quarter, and final_quarter) based on the quartiles (25%, 50% 75%) of the rental duration for movies across family-friendly movie categories.
+Note: the outer query provides the count of movies within each family-friendly film category for each corresponding rental duration category (i.e., quartile).
+*/
+
+WITH t1 AS (
+  SELECT f.title film_title,
+         c.name category_name,
+         f.rental_duration rental_duration,
+         NTILE(4) OVER (ORDER BY f.rental_duration) AS standard_quartile
+    FROM film f
+    JOIN film_category fc
+      ON f.film_id = fc.film_id
+    JOIN category c
+      ON fc.category_id = c.category_id
+  WHERE c.name IN ('Animation','Children','Classics','Comedy','Family','Music')
+)
+SELECT category_name,
+       standard_quartile,
+       COUNT(*)
+FROM t1
+GROUP BY 1,2
+ORDER BY 1,2;
+
+
+/*
+Question 3: How do the two stores compare in their count of rental orders per month?
+*/
+
+SELECT DATE_PART('month', r.rental_date) AS Rental_month,
+       DATE_PART('year', r.rental_date) AS Rental_year,
+       sto.store_id AS Store_ID,
+       COUNT(r.rental_id) AS Count_rentals
+  FROM rental r
+  JOIN staff sta
+    ON r.staff_id = sta.staff_id
+  JOIN store sto
+    ON sta.store_id = sto.store_id
+GROUP BY 3, 1, 2
+ORDER BY 4 DESC;
+
+
+/*
+Question 4: For the top 10 paying customers, what is the difference across their monthly payments during February 2007 and March 2007?
+
+To answer this question, I used the following forum post as guidance: https://study-hall.udacity.com/sg-645596-2431/rooms/community:nd104:645596-cohort-2431-project-2095/community:thread-u15139149-210211?contextType=room
+*/
+
+WITH amount_paid AS (
+  SELECT DATE_TRUNC('month', p.payment_date) AS pay_month,
+         c.first_name || ' ' || c.last_name AS full_name,
+         p.customer_id AS customer_id,
+         COUNT(*) AS pay_countpermonth,
+         SUM(p.amount) AS pay_amount
+  FROM customer c
+  JOIN payment p
+    ON c.customer_id = p.customer_id
+  GROUP BY 2, 3, 1
+  ORDER BY 2, 1
+),
+
+top_10_customers AS (
+  SELECT customer_id,
+         SUM(amount) payment_amount
+    FROM payment
+  GROUP BY 1
+  ORDER BY 2 DESC
+  LIMIT 10
+),
+
+t3 AS (
+  SELECT a.pay_month,
+         a.full_name,
+         a.pay_countpermonth,
+         a.pay_amount
+    FROM amount_paid a
+    JOIN top_10_customers t
+      ON a.customer_id = t.customer_id
+  ORDER BY 2, 1
+)
+
+SELECT pay_month,
+       full_name,
+       pay_countpermonth,
+       pay_amount,
+       LAG(pay_amount) OVER(ORDER BY full_name, pay_month) AS lag,
+       pay_amount - LAG(pay_amount) OVER(ORDER BY full_name, pay_month) AS lag_difference
+FROM t3
+WHERE full_name = 'Ana Bradley'
+/*WHERE full_name = 'Clara Shaw'*/
+/*WHERE full_name = 'Curtis Irby'*/
+/*WHERE full_name = 'Eleanor Hunt'*/
+/*WHERE full_name = 'Karl Seal'*/
+/*WHERE full_name = 'Marcia Dean'*/
+/*WHERE full_name = 'Marion Snyder'*/
+/*WHERE full_name = 'Mike Way'*/
+/*WHERE full_name = 'Rhonda Kennedy'*/
+/*WHERE full_name = 'Tommy Collazo'*/
